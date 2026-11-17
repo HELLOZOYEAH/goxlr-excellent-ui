@@ -58,7 +58,7 @@ export default {
   text-align: right;
   border: 0;
   background-color: transparent;
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
   color: #CCCCCC;
 }
 

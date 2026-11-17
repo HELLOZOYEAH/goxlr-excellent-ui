@@ -16,6 +16,7 @@
       <ProfileManager ref="manager" :profile-list="getProfileList()" :active-profile="getActiveProfile()"
                       :menu-list="getMenuList()" @new-profile="newProfile" @load-profile="loadProfile"
                       @save-profile="saveProfile" @save-profile-as="saveProfileAs"
+                      @duplicate-profile="duplicateProfile"
                       @menu-item-pressed="menuItemPressed" />
     </div>
 
@@ -57,6 +58,7 @@ export default {
     getMenuList() {
       return [
         {name: this.$t('message.profileManager.menuLoadProfile'), slug: 'load'},
+        {name: this.$t('message.profileManager.menuDuplicateProfile'), slug: 'duplicate'},
         {name: this.$t('message.profileManager.menuDeleteProfile'), slug: 'delete'}
       ];
     },
@@ -72,6 +74,10 @@ export default {
     menuItemPressed(event) {
       if (event.option.slug === "load") {
         this.loadProfile(event.item);
+      }
+
+      if (event.option.slug === "duplicate") {
+        this.$refs.manager.askDuplicate(event.item);
       }
 
       if (event.option.slug === "delete") {
@@ -108,6 +114,10 @@ export default {
         "SaveMicProfileAs": name
       }
       sendHttpCommand(store.getActiveSerial(), command);
+    },
+
+    duplicateProfile({source, name}) {
+      sendHttpCommand(store.getActiveSerial(), {"DuplicateMicProfile": [source, name]});
     },
 
     deleteProfile(name) {

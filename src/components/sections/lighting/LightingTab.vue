@@ -4,11 +4,13 @@ import Effects from "@/components/sections/lighting/subTabs/LightingEffects.vue"
 import Sampler from "@/components/sections/lighting/subTabs/LightingSampler.vue";
 import Cough from "@/components/sections/lighting/subTabs/LightingCough.vue";
 import Global from "@/components/sections/lighting/subTabs/LightingGlobal.vue";
+import FaderLights from "@/components/sections/lighting/subTabs/LightingFaderLights.vue";
 
 import {isDeviceMini} from "@/util/util";
 import CenteredContainer from "@/components/containers/CenteredContainer.vue";
 import {shallowRef} from "vue";
 import {HighlightArea} from "@/components/visualisation/VisualiserHelper";
+import {lightingHistory, undoLighting} from "@/util/lightingHistory";
 
 // We need to shallowRef these to avoid overheads..
 const LightingMixer = shallowRef(Mixer);
@@ -16,10 +18,11 @@ const LightingEffects = shallowRef(Effects);
 const LightingSampler = shallowRef(Sampler);
 const LightingCough = shallowRef(Cough);
 const LightingGlobal = shallowRef(Global);
+const LightingFaderLights = shallowRef(FaderLights);
 
 
 export default {
-  emits: ["on-lighting-changed"],
+  emits: ["on-lighting-changed", "open-tab"],
 
   name: "LightingTab",
   components: {
@@ -29,11 +32,17 @@ export default {
     LightingSampler,
     LightingCough,
     LightingGlobal,
+    LightingFaderLights,
   },
 
   data() {
     return {
       tabs: [
+        {
+          id: "faders",
+          type: LightingFaderLights,
+          display: "message.navigation.lightingFaders",
+        },
         {
           id: "global",
           type: LightingGlobal,
@@ -62,14 +71,25 @@ export default {
       ],
 
       currentTab: {
-        id: "global",
-        type: LightingGlobal,
-        display: "message.navigation.lightingGlobal",
+        id: "faders",
+        type: LightingFaderLights,
+        display: "message.navigation.lightingFaders",
       },
+      history: lightingHistory,
     }
   },
 
   methods: {
+    undo() {
+      undoLighting();
+    },
+    // Ctrl+Z on this page undoes the last colour change (text fields keep their own undo)
+    onUndoKey(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "z") return;
+      if (event.target.closest?.("input[type=text], input:not([type]), textarea, [contenteditable=true]")) return;
+      event.preventDefault();
+      this.undo();
+    },
     activateArea(area) {
       switch (area) {
         case HighlightArea.COUGH: {
@@ -158,7 +178,7 @@ export default {
     },
 
     getTabs() {
-      return isDeviceMini() ? [this.getTabById("global"), this.getTabById("mixer"), this.getTabById("cough")] : this.tabs;
+      return isDeviceMini() ? [this.getTabById("faders"), this.getTabById("global"), this.getTabById("mixer"), this.getTabById("cough")] : this.tabs;
     },
     onTabKeydown(event) {
       const tabs = this.getTabs();
@@ -199,7 +219,12 @@ export default {
   },
 
   mounted() {
-    this.currentTab = this.getTabById("global");
+    this.currentTab = this.getTabById("faders");
+    window.addEventListener("keydown", this.onUndoKey);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener("keydown", this.onUndoKey);
   }
 }
 </script>
@@ -211,8 +236,13 @@ export default {
             :tabindex="currentTab === tab ? 0 : -1" :ref="tab.id" @keydown="onTabKeydown">
       {{ $t(tab.display) }}
     </button>
+    <button type="button" class="undo" :disabled="history.count === 0 || history.busy"
+            :title="$t('message.lighting.undoHint')" @click="undo">
+      <font-awesome-icon icon="fa-solid fa-rotate-left"/>
+      {{ $t('message.lighting.undo') }}<span v-if="history.count" class="undoCount">{{ history.count }}</span>
+    </button>
   </CenteredContainer>
-  <component @nav-updated="navUpdated" ref="component" :is="currentTab.type" role="tabpanel" :aria-label="currentTab.display"/>
+  <component @nav-updated="navUpdated" @open-tab="id => $emit('open-tab', id)" ref="component" :is="currentTab.type" role="tabpanel" :aria-label="currentTab.display"/>
 </template>
 
 <style scoped>
@@ -249,5 +279,42 @@ export default {
 .button.active {
   color: #2b2f2d;
   background-color: #59b1b6;
+}
+
+/* Undo the last colour change: sits apart from the section buttons */
+.undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 0 14px;
+  padding: 6px 12px;
+  border: 1px solid #59b1b6;
+  border-radius: 5px !important;
+  background: transparent;
+  color: #8fd3d7;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.undo:hover:not(:disabled) {
+  background: rgba(89, 177, 182, .15);
+  color: #fff;
+}
+
+.undo:disabled {
+  border-color: #3b413f;
+  color: #6f7774;
+  cursor: default;
+}
+
+.undoCount {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #59b1b6;
+  color: #1b1f1e;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
 }
 </style>

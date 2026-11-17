@@ -65,6 +65,17 @@
       <ModalButton @click="$refs.nameModal.closeModal(); newProfileName = ''">{{$t('message.profileManager.newNameCancel')}}</ModalButton>
     </template>
   </AccessibleModal>
+
+  <AccessibleModal ref="duplicateModal" id="duplicateProfile">
+    <template v-slot:title>{{$t('message.profileManager.duplicateTitle', { profileName: duplicateSource })}}</template>
+    <template v-slot:default>
+      <ModalInput ref="duplicateName" v-model="duplicateName" :placeholder="$t('message.profileManager.newNamePlaceHolder')" @on-enter="duplicateProfile"/>
+    </template>
+    <template v-slot:footer>
+      <ModalButton @click="duplicateProfile">{{$t('message.profileManager.newNameOk')}}</ModalButton>
+      <ModalButton @click="$refs.duplicateModal.closeModal()">{{$t('message.profileManager.newNameCancel')}}</ModalButton>
+    </template>
+  </AccessibleModal>
 </template>
 
 <script>
@@ -77,7 +88,7 @@ import AccessibleModal from "@/components/design/modal/AccessibleModal.vue";
 import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
 
 export default {
-  emits: ['new-profile', 'load-profile', 'save-profile', 'save-profile-as', 'menu-item-pressed'],
+  emits: ['new-profile', 'load-profile', 'save-profile', 'save-profile-as', 'duplicate-profile', 'menu-item-pressed'],
 
   name: "ProfileManager",
   components: {FontAwesomeIcon, AccessibleModal, DropMenu, ModalInput, ModalButton, ProfileButton, ProfileButtonList},
@@ -92,7 +103,10 @@ export default {
       selectedProfile: '',
 
       createNewProfile: false,
-      newProfileName: ''
+      newProfileName: '',
+
+      duplicateSource: '',
+      duplicateName: ''
     }
   },
 
@@ -138,6 +152,25 @@ export default {
 
     saveActiveProfile() {
       this.$emit('save-profile');
+    },
+
+    // Asks for a name, with a free one filled in ("Name Copy", "Name Copy 2", ...)
+    askDuplicate(name) {
+      const taken = this.profileList.map(p => p.toLowerCase());
+      let copy = this.$t('message.profileManager.duplicateName', {profileName: name});
+      for (let n = 2; taken.includes(copy.toLowerCase()); n++) {
+        copy = `${this.$t('message.profileManager.duplicateName', {profileName: name})} ${n}`;
+      }
+      this.duplicateSource = name;
+      this.duplicateName = copy;
+      this.$refs.duplicateModal.openModal(this.$refs.duplicateName, this.$refs[this.getButtonId(name)][0]);
+    },
+
+    duplicateProfile() {
+      this.$refs.duplicateModal.closeModal();
+      const name = this.duplicateName.trim();
+      if (name === "" || name === this.duplicateSource) return;
+      this.$emit('duplicate-profile', {source: this.duplicateSource, name});
     },
 
     menuPressed(event, return_id, item) {

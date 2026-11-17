@@ -1,60 +1,69 @@
 <template>
   <div id="main">
-    <DeviceSelector v-if="!isDeviceSet()"/>
-    <template v-if="isDeviceSet()">
+    <NoDevice v-if="showNoDevice()"/>
+    <DeviceSelector v-else-if="!isDeviceSet()"/>
+    <!-- Device view: only the device, floating on the desktop (app window only, see util/appWindow.js) -->
+    <DeviceHome v-if="deviceReady() && deviceOnly" bare @open-section="leaveDeviceView" @open-app="leaveDeviceView(null)"/>
+    <template v-if="deviceReady() && !deviceOnly">
       <h1 class="screenreader-only"> {{ $t('message.navigation.accessibilityProfileSection') }}</h1>
-      <div style="display: flex; flex-direction: row; column-gap: 30px">
-        <div>
-          <FileTabs/>
-        </div>
-        <div aria-hidden="true" style="margin: auto; width: 100%">
-          <GoXLRVisualiser :highlighted-areas="this.visualiserHighlightAreas" @area-click="onAreaClicked"/>
-        </div>
-      </div>
+      <!-- Top bar: profile drop-down (profiles / samples / presets), mic profile, language, status -->
+      <AppHeader @device-view="enterDeviceView"/>
 
-      <div style="height: 25px; background-color: #3b413f"/>
       <h1 class="sr-only">{{ $t('message.navigation.accessibilityDeviceSection') }}</h1>
-      <Tabs ref="device-tabs" @on-change="onTabChange" :label="$t('message.navigation.accessibilityDeviceSection')">
-        <Tab id="mic" :name="$t('message.navigation.microphone')">
+      <Tabs ref="device-tabs" vertical @on-change="onTabChange" :label="$t('message.navigation.accessibilityDeviceSection')">
+        <Tab id="device" icon="fa-solid fa-sliders" :name="$t('message.device.tab')" selected>
+          <DeviceHome :zoom-from="zoomReturn" @open-section="zoomInto" @device-view="enterDeviceView"/>
+        </Tab>
+        <Tab id="mic" icon="fa-solid fa-microphone" :name="$t('message.navigation.microphone')">
           <Mic/>
         </Tab>
-        <Tab id="mixer" :name="$t('message.navigation.mixer')" selected>
-          <ContentContainer>
-            <Mixer/>
-          </ContentContainer>
+        <Tab id="mixer" icon="fa-solid fa-volume-high" :name="$t('message.navigation.mixer')">
+          <Mixer/>
         </Tab>
-        <Tab id="configuration" :name="$t('message.navigation.configuration')">
-          <ContentContainer>
-            <CenteredContainer>
-              <Faders ref="faders" @on-fader-channel-change="onFaderChannelChange"/>
-              <Cough/>
-            </CenteredContainer>
-          </ContentContainer>
+        <Tab id="configuration" icon="fa-solid fa-toggle-on" :name="$t('message.navigation.configuration')">
+          <div :class="zoomClass('configuration')">
+            <button v-if="zoomedFrom === 'configuration'" type="button" class="zoomBack" @click="zoomBack">
+              ← {{ $t('message.device.tab') }}
+            </button>
+            <ConfigurationTab ref="faders"/>
+          </div>
         </Tab>
-        <Tab id="effects" v-if="!isDeviceMini()" :name="$t('message.navigation.effects')">
-          <EffectsTab ref="effects" @on-effect-preset-change="onEffectPresetChange"/>
+        <Tab id="screens" icon="fa-solid fa-display" v-if="!isDeviceMini()" :name="$t('message.navigation.screens')">
+          <ScreensTab/>
         </Tab>
-        <Tab id="sampler" v-if="!isDeviceMini()" :name="$t('message.navigation.sampler')">
-          <ContentContainer>
+        <Tab id="effects" icon="fa-solid fa-wand-magic-sparkles" v-if="!isDeviceMini()" :name="$t('message.navigation.effects')">
+          <div :class="zoomClass('effects')">
+            <button v-if="zoomedFrom === 'effects'" type="button" class="zoomBack" @click="zoomBack">
+              ← {{ $t('message.device.tab') }}
+            </button>
+            <EffectsTab ref="effects" @on-effect-preset-change="onEffectPresetChange"/>
+          </div>
+        </Tab>
+        <Tab id="sampler" icon="fa-solid fa-table-cells-large" v-if="!isDeviceMini()" :name="$t('message.navigation.sampler')">
+          <div :class="zoomClass('sampler')">
+            <button v-if="zoomedFrom === 'sampler'" type="button" class="zoomBack" @click="zoomBack">
+              ← {{ $t('message.device.tab') }}
+            </button>
             <SamplerTab ref="sampler" @on-sample-bank-change="onSampleBankChange"/>
-          </ContentContainer>
+          </div>
         </Tab>
-        <Tab id="lighting" :name="$t('message.navigation.lighting')">
-          <LightingTab ref="lighting" @on-lighting-changed="onLightingDataChange"/>
+        <Tab id="link" icon="fa-solid fa-gamepad" name="GoXLR Link" :badge="linkSeen ? null : 'NEW'">
+          <LinkTab/>
         </Tab>
-        <Tab id="routing" :name="$t('message.navigation.routing')">
-          <ContentContainer>
-            <Routing/>
-          </ContentContainer>
+        <Tab id="lighting" icon="fa-solid fa-lightbulb" :name="$t('message.navigation.lighting')">
+          <LightingTab ref="lighting" @on-lighting-changed="onLightingDataChange" @open-tab="openTab"/>
         </Tab>
-        <Tab id="system" :name="$t('message.navigation.system')">
+        <Tab id="routing" icon="fa-solid fa-shuffle" :name="$t('message.navigation.routing')">
+          <Routing/>
+        </Tab>
+        <Tab id="system" icon="fa-solid fa-gear" :name="$t('message.navigation.system')">
           <ContentContainer>
             <SystemComponent/>
           </ContentContainer>
         </Tab>
       </Tabs>
     </template>
-    <VersionCheck @firmware-click="onFirmwareClicked" />
+    <VersionCheck v-if="!deviceOnly" @firmware-click="onFirmwareClicked" />
     <Language v-if="!utilitySupportsLanguages()" />
     <A11yNotifications/>
 
@@ -122,30 +131,42 @@
 
 <script>
 import A11yNotifications from "./A11yNotifications.vue";
-import Faders from "./sections/Faders.vue";
 import Mixer from "./sections/Mixer.vue";
+import ScreensTab from "./sections/ScreensTab.vue";
 import Tabs from "@/components/tabs/Tabs.vue";
 import Tab from "@/components/tabs/Tab.vue";
 import Routing from "@/components/sections/Routing.vue";
+import LinkTab from "@/components/sections/LinkTab.vue";
 import Mic from "@/components/sections/Mic.vue";
 import DeviceSelector from "@/components/sections/DeviceSelector.vue";
+import NoDevice from "@/components/sections/NoDevice.vue";
 import {store} from "@/store";
-import Cough from "@/components/sections/Cough.vue";
 import {runWebsocket, websocket} from "@/util/sockets";
 import SystemComponent from "@/components/sections/System.vue";
 import FileTabs from "@/components/sections/files/FileTabs.vue";
 import EffectsTab from "@/components/sections/EffectsTab.vue";
+import ConfigurationTab from "@/components/sections/ConfigurationTab.vue";
 import {isDeviceMini} from "@/util/util";
 import LightingTab from "@/components/sections/lighting/LightingTab.vue";
 import SamplerTab from "@/components/sections/SamplerTab.vue";
 import ContentContainer from "@/components/containers/ContentContainer.vue";
-import CenteredContainer from "@/components/containers/CenteredContainer.vue";
 import GoXLRVisualiser from "@/components/visualisation/GoXLRVisualiser.vue";
 import VersionCheck from "@/components/VersionCheck.vue";
+import LanguageToggle from "@/components/LanguageToggle.vue";
+import DeviceHome from "@/components/sections/device/DeviceHome.vue";
+import AppHeader from "@/components/AppHeader.vue";
 import {HighlightArea} from "@/components/visualisation/VisualiserHelper";
 import Language from "@/components/Language.vue";
 import AccessibleModal from "@/components/design/modal/AccessibleModal.vue";
 import ProgressBar from "@/components/design/ProgressBar.vue";
+import {startLightingHistory} from "@/util/lightingHistory";
+import {startProfileDirty} from "@/util/profileDirty";
+import {enterDeviceView, inApp, leaveDeviceView, startsInDeviceView} from "@/util/appWindow";
+
+// Device view window size: the device (about 1.8 : 1) plus the strip above it for the pop-up and buttons
+const DEVICE_VIEW_WIDTH = 960;
+const DEVICE_VIEW_RATIO = 0.553;
+const DEVICE_VIEW_EXTRA = 84;
 
 export default {
   name: "GoXLR",
@@ -154,27 +175,34 @@ export default {
     ProgressBar,
     AccessibleModal,
     Language,
+    LanguageToggle,
+    DeviceHome,
+    AppHeader,
     VersionCheck,
     GoXLRVisualiser,
     A11yNotifications,
-    CenteredContainer,
     ContentContainer,
     SamplerTab,
     LightingTab,
     EffectsTab,
+    ConfigurationTab,
     FileTabs,
     SystemComponent,
-    Cough,
     DeviceSelector,
+    NoDevice,
     Routing,
+    LinkTab,
     Tab,
     Tabs,
     Mixer,
-    Faders,
     Mic,
+    ScreensTab,
   },
 
   computed: {
+    readyNow() {
+      return this.deviceReady();
+    },
     HighlightArea() {
       return HighlightArea
     },
@@ -199,7 +227,29 @@ export default {
   data() {
     return {
       visualiserHighlightAreas: [],
+      activeTab: "device",
+      linkSeen: (() => { try { return !!localStorage.getItem("goxlr-link-seen"); } catch (e) { return false; } })(),
+      zoomedFrom: null,   // page we zoomed into from the device view (shows the way back)
+      zoomReturn: null,   // page the device view should zoom back out of when it opens
+      zoomLeaving: false, // the zoomed-into page is fading away before the zoom back out
+      deviceOnly: false,  // device view: the window shows only the device, no frame
+      startChecked: false,
     }
+  },
+
+  watch: {
+    // Opens in device view once the GoXLR is there; leaves it if the GoXLR goes away
+    readyNow: {
+      immediate: true,
+      handler(ready) {
+        if (ready && !this.startChecked) {
+          this.startChecked = true;
+          if (inApp() && startsInDeviceView()) this.enterDeviceView();
+        } else if (!ready && this.deviceOnly) {
+          this.leaveDeviceView(null);
+        }
+      },
+    },
   },
 
   methods: {
@@ -234,9 +284,73 @@ export default {
       let ready = store.hasActiveDevice() && store.isConnected();
       return ready;
     },
+    // The daemon is up but has no GoXLR at all (several GoXLRs still get the picker).
+    // While developing, ?preview=no-device (or no-device-linked) shows it with a GoXLR plugged in.
+    showNoDevice() {
+      if (import.meta.env.DEV && new URLSearchParams(location.search).get("preview")?.startsWith("no-device")) return true;
+      return !this.isDeviceSet() && store.isConnected() && store.getDeviceCount() === 0;
+    },
+
+    openTab(id) {
+      this.$refs["device-tabs"].selectTabById(id);
+    },
+
+    deviceReady() {
+      return this.isDeviceSet() && !this.showNoDevice();
+    },
+    enterDeviceView() {
+      if (!inApp() || this.deviceOnly) return;
+      const width = Math.min(DEVICE_VIEW_WIDTH, screen.availWidth * 0.7);
+      enterDeviceView(width, width * DEVICE_VIEW_RATIO + DEVICE_VIEW_EXTRA);
+      this.deviceOnly = true;
+      document.documentElement.classList.add("deviceOnly");
+    },
+    // Frame back, full size, then the page that was clicked (null = the Device page)
+    async leaveDeviceView(page) {
+      if (!this.deviceOnly) return;
+      const device = document.querySelector(".deviceHome.bare .device");
+      document.documentElement.classList.remove("deviceOnly");
+      await leaveDeviceView(device);
+      this.deviceOnly = false;
+      if (!page) return;
+      await this.$nextTick();
+      if (this.$refs["device-tabs"]) this.zoomInto(page);
+    },
+
+    zoomInto(id) {
+      this.zoomedFrom = id;
+      this.zoomReturn = null;
+      this.openTab(id);
+    },
+
+    zoomClass(id) {
+      return {zoomArrive: this.zoomedFrom === id, zoomLeave: this.zoomLeaving};
+    },
+
+    zoomBack() {
+      if (this.zoomLeaving) return;
+      this.zoomLeaving = true;
+      setTimeout(() => {
+        this.zoomLeaving = false;
+        this.zoomReturn = this.zoomedFrom;
+        this.zoomedFrom = null;
+        this.openTab("device");
+      }, 160);
+    },
 
     onTabChange(tab) {
       let id = tab.id;
+      this.activeTab = id;
+      if (id !== this.zoomedFrom) this.zoomedFrom = null;
+      if (id !== "device") this.zoomReturn = null;
+      if (id === "link" && !this.linkSeen) {
+        this.linkSeen = true;
+        try {
+          localStorage.setItem("goxlr-link-seen", "1");
+        } catch (e) {
+          // shows NEW again next time, nothing worse
+        }
+      }
       if (id === "configuration") {
         this.visualiserHighlightAreas = [
           HighlightArea.COUGH,
@@ -270,6 +384,11 @@ export default {
 
     onLightingDataChange() {
       let lightingData = this.$refs.lighting.getNodes();
+      // a tab editing "all" has no single part to highlight
+      if (lightingData[0] !== "cough" && lightingData.length < 2) {
+        this.visualiserHighlightAreas = [];
+        return;
+      }
 
       // mixer channels
       if (lightingData[0] === "mixer")
@@ -457,6 +576,8 @@ export default {
 
   created() {
     runWebsocket();
+    startLightingHistory();
+    startProfileDirty();
   },
 
   mounted() {
@@ -481,9 +602,54 @@ export default {
   width: 100%;
   font-size: 10pt;
 }
+
+/* Device view: the window is see-through around the device */
+html.deviceOnly, html.deviceOnly body, html.deviceOnly #app, html.deviceOnly #main {
+  background: transparent !important;
+  overflow: hidden;
+}
 </style>
 
 <style scoped>
+/* The page grows in as the zoom lands, and shrinks away before zooming back out */
+.zoomArrive {
+  animation: zoomArrive .32s cubic-bezier(.2, .7, .3, 1) both;
+}
+
+@keyframes zoomArrive {
+  from {
+    opacity: 0;
+    transform: scale(.96);
+  }
+}
+
+.zoomArrive.zoomLeave {
+  animation: zoomLeave .16s ease-in both;
+}
+
+@keyframes zoomLeave {
+  to {
+    opacity: 0;
+    transform: scale(.96);
+  }
+}
+
+.zoomBack {
+  margin: 16px 0 0 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #d6dcd9;
+  background: transparent;
+  border: 1px solid #59b1b6;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.zoomBack:hover {
+  background: rgba(89, 177, 182, .1);
+}
+
 .modalButtonBox {
   display: flex;
   flex-direction: row;

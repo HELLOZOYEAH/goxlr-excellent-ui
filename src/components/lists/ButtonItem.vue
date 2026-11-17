@@ -33,7 +33,7 @@ export default {
 
 <style scoped>
 button {
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
 
   display: block;
   box-sizing: border-box;

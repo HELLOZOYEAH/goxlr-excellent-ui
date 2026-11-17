@@ -1,363 +1,331 @@
-<script>
-import ContentContainer from "@/components/containers/ContentContainer.vue";
-import GroupContainer from "@/components/containers/GroupContainer.vue";
-import RadioSelection from "@/components/lists/RadioSelection.vue";
-import ColourPicker from "@/components/sections/lighting/elements/ColourPicker.vue";
+<template>
+  <div class="lightingPage">
+    <h2 class="title">{{ $t('message.lighting.globalTab.title') }}</h2>
+    <p class="lede">{{ $t('message.lighting.globalTab.lede') }}</p>
 
+    <div class="layout">
+      <!-- Preview: the GoXLR's lights with the animation playing, as an impression of the device -->
+      <section class="preview" :aria-label="$t('message.lighting.faderLights.live')">
+        <div class="previewHead">
+          <span class="live">{{ $t('message.lighting.faderLights.live') }}</span>
+          <span>{{ $t('message.lighting.globalTab.hint') }}</span>
+        </div>
+        <div class="logo" aria-hidden="true">GO<span :style="{ color: '#' + accent() }">X</span>LR</div>
+        <FaderStrips :clickable="false" :led-override="mode() === 'None' ? null : animatedLed"/>
+      </section>
+
+      <section class="controls">
+        <template v-if="supported()">
+          <div>
+            <div class="lab">{{ $t('message.lighting.globalTab.animation') }}</div>
+            <div class="styles anims" role="radiogroup" :aria-label="$t('message.lighting.globalTab.animation')">
+              <button v-for="anim in animations()" :key="anim" type="button" role="radio" class="styleCard"
+                      :class="{ on: mode() === anim }" :aria-checked="mode() === anim" @click="setMode(anim)">
+                <span class="mini leds"><i v-for="n in 8" :key="n" :style="{ background: miniLed(anim, n - 1) }"></i></span>
+                <b>{{ $t(`message.lighting.globalTab.modes.${anim}.name`) }}</b>
+                <span class="desc">{{ $t(`message.lighting.globalTab.modes.${anim}.desc`) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="mode() !== 'None'">
+            <div class="lab">{{ $t('message.lighting.globalTab.tuning') }}</div>
+            <div class="mrow">
+              <label for="global-mod1">{{ $t('message.lighting.globalTab.mod1') }}</label>
+              <input id="global-mod1" type="range" min="0" max="100" :value="mod1" :style="{ '--p': mod1 + '%' }"
+                     @input="mod1 = +$event.target.value" @change="setMod('SetAnimationMod1', 'mod1', mod1)">
+              <span class="val">{{ mod1 }}</span>
+            </div>
+            <div class="mrow" :class="{ off: !mod2Used() }">
+              <label for="global-mod2">{{ $t('message.lighting.globalTab.mod2') }}</label>
+              <input id="global-mod2" type="range" min="0" max="100" :value="mod2" :style="{ '--p': mod2 + '%' }"
+                     :disabled="!mod2Used()" @input="mod2 = +$event.target.value" @change="setMod('SetAnimationMod2', 'mod2', mod2)">
+              <span class="val">{{ mod2 }}</span>
+            </div>
+            <div class="waterRow" :class="{ off: !waterfallUsed() }">
+              <span class="waterLabel">{{ $t('message.lighting.globalTab.waterfall') }}</span>
+              <div v-if="waterfallUsed()" class="seg" role="radiogroup" :aria-label="$t('message.lighting.globalTab.waterfall')">
+                <button v-for="dir in waterfalls" :key="dir" type="button" role="radio" :aria-checked="waterfall() === dir"
+                        :class="{ on: waterfall() === dir }" @click="setWaterfall(dir)">{{ $t(`message.lighting.globalTab.water.${dir}`) }}
+                </button>
+              </div>
+              <span v-else class="previewNote">{{ $t('message.lighting.globalTab.notUsed') }}</span>
+            </div>
+          </div>
+        </template>
+        <p v-else class="note">{{ $t('message.lighting.globalTab.unsupported') }}</p>
+
+        <div>
+          <div class="lab">{{ $t('message.lighting.faderLights.colours') }}</div>
+          <div class="colourRow">
+            <ColourSwatch id="global-accent" :value="accent()" :label="$t('message.lighting.globalTab.accent')"
+                          :hint="$t('message.lighting.globalTab.accentHint')" @change="setAccent($event)"/>
+          </div>
+        </div>
+
+        <div>
+          <div class="lab">{{ $t('message.lighting.globalTab.paint') }}</div>
+          <div class="colourRow">
+            <ColourSwatch id="global-paint" :value="paintColour" :label="$t('message.lighting.globalTab.oneColour')"
+                          :hint="$t('message.lighting.globalTab.oneColourHint')" @change="paintColour = $event"/>
+            <button type="button" class="swap" @click="paint">{{ $t('message.lighting.globalTab.paintButton') }}</button>
+          </div>
+          <div class="sublab">{{ $t('message.lighting.globalTab.paintWarning') }}</div>
+        </div>
+
+        <p class="note">{{ $t('message.lighting.globalTab.note') }}</p>
+
+        <LightingSaveRow/>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script>
+import ColourSwatch from "@/components/sections/lighting/elements/ColourSwatch.vue";
 import {store} from "@/store";
 import {websocket} from "@/util/sockets";
-import CenteredContainer from "@/components/containers/CenteredContainer.vue";
-import RangeSelector from "@/components/slider/components/Range.vue";
-import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
 import {isDeviceMini} from "@/util/util";
+import {LED_COUNT, ledColour, mixColours} from "@/util/faderLeds";
+import FaderStrips from "@/components/sections/lighting/elements/FaderStrips.vue";
+import LightingSaveRow from "@/components/sections/lighting/elements/LightingSaveRow.vue";
 
+const ANIMATIONS = ["None", "RetroRainbow", "RainbowBright", "RainbowDark", "Simple", "Ripple"];
+const RAINBOW = ["FF4F6D", "FF8A3D", "F2C94C", "59D65C", "2FC4E8", "7C5CFF"];
+const TICK_MS = 80;
+
+// Lighting → Global: the light animation, the logo (Accent) light, and painting every light one colour
 export default {
   name: "LightingGlobal",
-  components: {
-    FontAwesomeIcon,
-    RangeSelector,
-    CenteredContainer,
-    ContentContainer,
-    GroupContainer,
-    RadioSelection,
-    ColourPicker
-  },
+  components: {ColourSwatch, FaderStrips, LightingSaveRow},
+  emits: ["nav-updated"],
 
   data() {
     return {
-      selected: 'Global',
-      mod1Value: 0,
-      mod2Value: 0,
-      lock_updates: false,
+      waterfalls: ["Up", "Down", "Off"],
+      mod1: 0,
+      mod2: 0,
+      paintColour: "FFFFFF",
+      tick: 0,
     }
+  },
+
+  mounted() {
+    const animation = this.device().lighting.animation;
+    this.mod1 = animation.mod1;
+    this.mod2 = animation.mod2;
+    this.paintColour = this.device().lighting.simple.Global.colour_one;
+    const slow = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    this.timer = setInterval(() => !document.hidden && this.tick++, slow ? TICK_MS * 5 : TICK_MS);
+  },
+
+  beforeUnmount() {
+    clearInterval(this.timer);
+  },
+
+  computed: {
+    animationState() {
+      return store.getActiveDevice().lighting.animation;
+    },
+  },
+
+  watch: {
+    // Follow changes made elsewhere (another window, Undo)
+    animationState: {
+      deep: true,
+      handler(animation) {
+        this.mod1 = animation.mod1;
+        this.mod2 = animation.mod2;
+      },
+    },
   },
 
   methods: {
     getNodes() {
       return [];
     },
+    device() {
+      return store.getActiveDevice();
+    },
+    serial() {
+      return store.getActiveSerial();
+    },
+    supported() {
+      return this.device().lighting.animation.supported;
+    },
+    // Ripple isn't available on the Mini
+    animations() {
+      return isDeviceMini() ? ANIMATIONS.filter(a => a !== "Ripple") : ANIMATIONS;
+    },
+    mode() {
+      return this.device().lighting.animation.mode;
+    },
+    waterfall() {
+      return this.device().lighting.animation.waterfall_direction;
+    },
+    mod2Used() {
+      return this.mode() === "RainbowBright" || this.mode() === "RainbowDark";
+    },
+    waterfallUsed() {
+      return this.mode() !== "None" && this.mode() !== "RetroRainbow";
+    },
+    accent() {
+      return this.device().lighting.simple.Accent.colour_one;
+    },
 
-    getAreaOptions() {
-      return [
-        {
-          id: 'Global',
-          label: this.$t('message.lighting.global.areas.areas.global'),
-        },
-        {
-          id: 'Accent',
-          label: this.$t('message.lighting.global.areas.areas.accent')
+    /* ---------- Drawing ---------- */
+    // An impression of the animation (not the device's exact maths): LED `index` of `count` in column `col`
+    animLed(anim, colours, col, index, count) {
+      const direction = this.waterfall() === "Up" ? 1 : -1;
+      const step = Math.floor(this.tick * (0.25 + this.mod1 / 80)) * direction;
+      const hex = (c) => "#" + c;
+      switch (anim) {
+        case "RetroRainbow":
+          return hex(RAINBOW[((col + Math.floor(this.tick / 6)) % 6 + 6) % 6]);
+        case "RainbowBright":
+        case "RainbowDark": {
+          const spread = 1 + Math.round(this.mod2 / 25);
+          const colour = RAINBOW[((Math.floor((index + col) / spread) - step) % 6 + 6) % 6];
+          return anim === "RainbowDark" ? mixColours(colour, "151817", 0.45) : hex(colour);
         }
-      ];
-    },
-
-    getAnimationOptions() {
-      let animations = [
-        {
-          id: 'None',
-          label: this.$t("message.lighting.global.animations.modes.none"),
-        },
-        {
-          id: 'RetroRainbow',
-          label: this.$t("message.lighting.global.animations.modes.rainbowRetro")
-        },
-        {
-          id: 'RainbowBright',
-          label: this.$t("message.lighting.global.animations.modes.rainbowBright")
-        },
-        {
-          id: 'RainbowDark',
-          label: this.$t("message.lighting.global.animations.modes.rainbowDark")
-        },
-        {
-          id: 'Simple',
-          label: this.$t("message.lighting.global.animations.modes.simple")
-        },
-      ];
-
-      // Apparently Ripple isn't supported on the mini..
-      if (!isDeviceMini()) {
-        animations.push({
-          id: 'Ripple',
-          label: this.$t("message.lighting.global.animations.modes.ripple")
-        });
-      }
-      return animations;
-    },
-
-    color() {
-      return "#" + store.getActiveDevice().lighting.simple[this.selected].colour_one;
-    },
-
-    onSelectionChange(option) {
-      this.selected = option
-    },
-
-    onColourChange(value) {
-      if (this.selected === "Accent") {
-        websocket.send_command(store.getActiveSerial(), {"SetSimpleColour": [this.selected, value.substr(1, 6)]});
-      } else {
-        websocket.send_command(store.getActiveSerial(), {"SetGlobalColour": value.substr(1, 6)});
+        case "Simple": {
+          const phase = (Math.sin((index - step) / 2.5) + 1) / 2;
+          return mixColours(colours.colour_two, colours.colour_one, phase);
+        }
+        case "Ripple": {
+          const wave = ((step + col) % count + count) % count;
+          return Math.abs(index - wave) < 2 ? hex(this.accent()) : hex(colours.colour_two);
+        }
+        default:
+          return ledColour({style: "Gradient", top: colours.colour_one, bottom: colours.colour_two, index, count, position: 1, meter: null});
       }
     },
-
-    animationSupported() {
-      return store.getActiveDevice().lighting.animation.supported;
+    // The fader LEDs while an animation plays
+    animatedLed(fader, side, index) {
+      const col = ["A", "B", "C", "D"].indexOf(fader) * 2 + side;
+      return this.animLed(this.mode(), this.device().lighting.faders[fader].colours, col, index, LED_COUNT);
+    },
+    // The little demo column on each animation card, in the colours of fader 1
+    miniLed(anim, index) {
+      return this.animLed(anim, this.device().lighting.faders.A.colours, 0, index, 8);
     },
 
-    animationModeSelected() {
-      return store.getActiveDevice().lighting.animation.mode;
+    /* ---------- Changes ---------- */
+    setMode(mode) {
+      this.device().lighting.animation.mode = mode;
+      websocket.send_command(this.serial(), {"SetAnimationMode": mode});
     },
-
-    onAnimationModeChange(id) {
-      websocket.send_command(store.getActiveSerial(), {"SetAnimationMode": id});
+    setMod(command, field, value) {
+      this.device().lighting.animation[field] = value;
+      websocket.send_command(this.serial(), {[command]: value});
     },
-
-    // Range Helpers
-    getRangeColour(enabled) {
-      if (enabled) {
-        return "#82CFD0";
-      }
-      return "#3b7679";
+    setWaterfall(direction) {
+      this.device().lighting.animation.waterfall_direction = direction;
+      websocket.send_command(this.serial(), {"SetAnimationWaterfall": direction});
     },
-
-    // Mod1 Settings..
-    isMod1Enabled() {
-      return this.animationModeSelected() !== "None";
+    setAccent(colour) {
+      this.device().lighting.simple.Accent.colour_one = colour;
+      websocket.send_command(this.serial(), {"SetSimpleColour": ["Accent", colour]});
     },
-
-    getMod1StorePath() {
-      return "/mixers/S201200586CQK/lighting/animation/mod1"
+    // Sets every light on the device to one colour; Undo can bring the old colours back
+    paint() {
+      websocket.send_command(this.serial(), {"SetGlobalColour": this.paintColour});
     },
-
-    getMod1Value() {
-      return store.getActiveDevice().lighting.animation.mod1;
-    },
-
-    setMod1Value(value) {
-      value = parseInt(value);
-      this.mod1Value = value;
-      if (this.lock_updates) {
-        return;
-      }
-
-      this.lock_updates = true;
-      store.getActiveDevice().lighting.animation.mod1 = value;
-      websocket.send_command(store.getActiveSerial(), {"SetAnimationMod1": value}).then(() => {
-        this.lock_updates = false;
-      });
-    },
-
-    // Mod2 Settings..
-    isMod2Enabled() {
-      let mode = this.animationModeSelected();
-      return mode === "RainbowBright" || mode === "RainbowDark";
-    },
-
-    getMod2StorePath() {
-      return "/mixers/S201200586CQK/lighting/animation/mod2"
-    },
-
-    getMod2Value() {
-      return store.getActiveDevice().lighting.animation.mod2;
-    },
-
-    setMod2Value(value) {
-      value = parseInt(value);
-      this.mod2Value = value;
-
-      if (this.lock_updates) {
-        return;
-      }
-
-      this.lock_updates = true;
-      store.getActiveDevice().lighting.animation.mod2 = value;
-      websocket.send_command(store.getActiveSerial(), {"SetAnimationMod2": value}).then(() => {
-        this.lock_updates = false;
-      });
-    },
-
-    mouseUp(id) {
-      if (id === "mod1") {
-        // Force an update with this value..
-        store.getActiveDevice().lighting.animation.mod1 = this.mod1Value;
-        websocket.send_command(store.getActiveSerial(), {"SetAnimationMod1": this.mod1Value});
-        return;
-      }
-
-      store.getActiveDevice().lighting.animation.mod2 = this.mod2Value;
-      websocket.send_command(store.getActiveSerial(), {"SetAnimationMod2": this.this.mod2Value});
-    },
-
-    // Waterfall Settings..
-    isWaterfallEnabled() {
-      let mode = this.animationModeSelected();
-      return mode !== "None" && mode !== "RetroRainbow";
-    },
-
-    isWaterFallActive(type) {
-      return store.getActiveDevice().lighting.animation.waterfall_direction === type;
-    },
-
-    setWaterfall(mode) {
-      if (!this.isWaterfallEnabled()) {
-        return;
-      }
-      websocket.send_command(store.getActiveSerial(), {"SetAnimationWaterfall": mode});
-    }
-
   },
-  mounted() {
-    this.mod1Value = store.getActiveDevice().lighting.animation.mod1;
-    this.mod2Value = store.getActiveDevice().lighting.animation.mod2;
-  }
 }
 </script>
 
-<template>
-  <CenteredContainer>
-    <ContentContainer style="padding-top: 15px; padding-bottom: 20px">
-      <GroupContainer :title="$t('message.lighting.global.areas.title')">
-        <RadioSelection :title="$t('message.lighting.global.areas.area')" group="lighting_global_areas"
-                        :options="getAreaOptions()" :selected="this.selected"
-                        @selection-changed="onSelectionChange"/>
-        <ColourPicker :title="$t('message.lighting.common.colour')" :color-value="color()"
-                      @colour-changed="onColourChange"/>
-      </GroupContainer>
-      <GroupContainer v-if="animationSupported()" :title="$t('message.lighting.global.animations.title')">
-        <RadioSelection :title="$t('message.lighting.global.animations.mode')" group="lighting_animation"
-                        :options="getAnimationOptions()" :selected="this.animationModeSelected()"
-                        @selection-changed="onAnimationModeChange"/>
-
-        <div style="text-align: center; color: #fff; padding-left: 8px">
-          <div class="title" :class="{ disabled: !isMod1Enabled()}">
-            {{ $t('message.lighting.global.animations.mod1') }}
-          </div>
-          <RangeSelector
-              id="mod1"
-              :store-path=getMod1StorePath()
-              :current-field-value=mod1Value
-              @value-updated="setMod1Value"
-              :needs-rotation="false" :height=180
-              :disabled="!isMod1Enabled()"
-              :colour="getRangeColour(isMod1Enabled())"
-              @mouse-up="mouseUp"
-
-          />
-          <div class="modValue" :class="{ disabled: !isMod1Enabled()}">{{ getMod1Value() }}</div>
-
-          <div class="title" :class="{ disabled: !isMod2Enabled()}">
-            {{ $t('message.lighting.global.animations.mod2') }}
-          </div>
-          <RangeSelector
-              id="mod2"
-              :store-path=getMod2StorePath()
-              :current-field-value=mod2Value
-              @value-updated="setMod2Value"
-              :needs-rotation="false" :height=180
-              :disabled="!isMod2Enabled()"
-              :colour="getRangeColour(isMod2Enabled())"
-              @mouse-up="mouseUp"
-          />
-          <div class="modValue" :class="{ disabled: !isMod2Enabled()}">{{ getMod2Value() }}</div>
-
-          <div>
-            <div class="title" :class="{ disabled: !isWaterfallEnabled()}">
-              {{ $t('message.lighting.global.animations.waterfall') }}
-            </div>
-            <div role="button" :aria-label="$t('message.common.waterfallAnimationUp')" :aria-valuenow="isWaterFallActive('Up')"
-                 class="waterfall" :class="{ active: isWaterFallActive('Up'), disabled: !isWaterfallEnabled() }"
-                 @click="setWaterfall('Up')">
-              <font-awesome-icon icon="fa-solid fa-up-long"/>
-            </div>
-            <div role="button" :aria-label="$t('message.common.waterfallAnimationDown')" :aria-valuenow="isWaterFallActive('Down')"
-                 class="waterfall" :class="{ active: isWaterFallActive('Down'), disabled: !isWaterfallEnabled() }"
-                 @click="setWaterfall('Down')">
-              <font-awesome-icon icon="fa-solid fa-down-long"/>
-            </div>
-            <div class="wf-button" :class="{ disabled: !isWaterfallEnabled() }">
-              <button :class="{ active: isWaterFallActive('Off') }" style="width: 100%" @click="setWaterfall('Off')"
-                      :disabled="!isWaterfallEnabled()">
-                {{ $t('message.lighting.global.animations.waterfallOff') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </GroupContainer>
-    </ContentContainer>
-  </CenteredContainer>
-</template>
-
+<style scoped src="../elements/lightingPage.css"></style>
 <style scoped>
-.title {
-  margin-bottom: 10px;
-  margin-top: 1px;
-  text-transform: uppercase;
+.logo {
+  align-self: center;
+  font-family: var(--goxlr-title-font);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: .22em;
+  color: #c3ccc8;
 }
 
-.title.disabled {
-  color: #818483;
+/* The animation cards: three to a row, LED column like the Fader lights style cards */
+.anims {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.modValue {
-  margin-top: 12px;
-  margin-bottom: 12px;
-  color: #82CFD0;
+.styleCard .leds {
+  flex-direction: column-reverse;
+  gap: 2px;
 }
 
-.modValue.disabled {
-  color: #3C6061;
+.styleCard .leds i {
+  width: 12px;
+  height: 6px;
+  border-radius: 1px;
 }
 
-.waterfall {
-  cursor: pointer;
-  display: inline-block;
-  width: 50%;
-  font-size: 40px
+/* Slider rows, as on the Mic page */
+.mrow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 14px;
+  min-height: 40px;
+  max-width: 520px;
 }
 
-.waterfall.active {
-  color: #59B1B6;
-
+.mrow label, .waterLabel {
+  font-size: 13px;
+  color: #9aa4a0;
 }
 
-.waterfall.active.disabled {
-  cursor: initial;
-  color: #427273;
+.mrow input {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  margin: 0;
+  min-width: 0;
+  background: transparent;
 }
 
-.waterfall:not(.active) {
-  color: #447475;
+.mrow input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #59b1b6 var(--p), #3a413f var(--p));
 }
 
-.waterfall:not(.active).disabled {
-  cursor: initial;
-  color: #385352;
+.mrow input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid #8b9592;
+  border-radius: 3px;
+  background: #c9d0cd;
 }
 
-.wf-button > button {
-  border: none;
-  width: 100%;
-  font-size: 12px;
-  background-color: #447475;
-  color: #fff;
-  font-family: LeagueMonoCondensed, sans-serif;
-  padding: 3px;
-  cursor: pointer;
+.mrow input:focus-visible {
+  outline: 2px solid #59b1b6;
 }
 
-.wf-button > button.active {
-  background-color: #59B1B6;
+.mrow .val {
+  justify-self: end;
+  width: 64px;
+  padding: 6px 0;
+  border-radius: 6px;
+  background: #171b1a;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.wf-button > button:disabled {
-  cursor: initial;
-  background-color: #385352;
+.waterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
 }
 
-.wf-button > button.active:disabled {
-  cursor: initial;
-  color: #427273;
+.waterLabel {
+  width: 110px;
 }
-
-
 </style>

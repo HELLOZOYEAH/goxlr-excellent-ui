@@ -24,6 +24,10 @@ export default {
     font-size: 10pt;
 
     text-transform: uppercase;
+
+    font-family: var(--goxlr-title-font);
+
+    letter-spacing: var(--goxlr-title-spacing);
     text-align: center;
     font-stretch: condensed;
     white-space: nowrap;

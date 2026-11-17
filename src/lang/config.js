@@ -6,6 +6,7 @@ import pl_PL from "@/lang/languages/pl_PL";
 import nl_NL from "@/lang/languages/nl_NL"
 import fr_FR from "@/lang/languages/fr_FR"
 import ru_RU from "@/lang/languages/ru_RU"
+import th_TH from "@/lang/languages/th_TH"
 
 export const messages = {
     en_GB: en_GB, // English (British)
@@ -16,6 +17,7 @@ export const messages = {
     nl_NL: nl_NL, // Dutch (Netherlands)
     fr_FR: fr_FR, // French (France)
     ru_RU: ru_RU, // Russian (Russia)
+    th_TH: th_TH, // Thai (Thailand)
 }
 
 export const languages = {
@@ -27,4 +29,5 @@ export const languages = {
     nl_NL: "Dutch (Netherlands)",
     pl_PL: "Polski (Polska)",
     ru_RU: "Русский (Russia)",
+    th_TH: "ไทย (Thailand)",
 }

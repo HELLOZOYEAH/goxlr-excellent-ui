@@ -68,7 +68,7 @@ button .iconTitle {
   line-height: 40px;
   background-color: #353937;
   color: #fff;
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
   text-align: center;
   white-space: nowrap;
   padding: 0px 10px;

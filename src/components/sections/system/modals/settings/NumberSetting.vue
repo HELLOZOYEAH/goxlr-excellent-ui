@@ -112,7 +112,7 @@ export default {
   text-align: right;
   outline: none;
   background-color: transparent;
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
   color: #ccc;
   border: 0;
   -moz-appearance: textfield;

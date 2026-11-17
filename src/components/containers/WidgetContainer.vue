@@ -42,6 +42,8 @@ export default {
     color: #ffffff;
     background-color: #3b413f;
     text-transform: uppercase;
+    font-family: var(--goxlr-title-font);
+    letter-spacing: var(--goxlr-title-spacing);
     text-align: center;
 }
 </style>

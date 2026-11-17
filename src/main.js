@@ -17,7 +17,11 @@ import {
     faMicrophoneLines, faCircleQuestion, faFloppyDisk, faFileCirclePlus, faCopy, faTrash, faCheckCircle, faCheck,
     faFolder, faEllipsisVertical, faPlay, faStop, faXmark, faGear, faBookOpen, faCircleInfo, faChevronLeft,
     faChevronRight, faPowerOff, faLink, faLinkSlash, faVolumeXmark, faMicrophoneSlash, faMusic, faTurnUp, faHeadphones,
-    faUpLong, faDownLong, faRepeat, faWaveSquare, faSquare, faSquareCheck, faDownload
+    faUpLong, faDownLong, faRepeat, faWaveSquare, faSquare, faSquareCheck, faDownload,
+    faSliders, faMicrophone, faVolumeHigh, faToggleOn, faWandMagicSparkles, faTableCellsLarge, faLightbulb, faShuffle,
+    faChevronDown, faComments, faGamepad, faTv, faRightToBracket, faDesktop, faTowerBroadcast, faComment, faCircleDot,
+    faPlug, faEarListen, faBars, faRotateLeft, faPen, faUpRightFromSquare, faDownLeftAndUpRightToCenter, faRotate, faRightLeft, faClock,
+    faRightFromBracket, faCommentDots, faLock, faChevronUp, faTriangleExclamation, faDisplay, faFont, faImage, faTag
 } from "@fortawesome/free-solid-svg-icons";
 import {createI18n} from "vue-i18n";
 import {messages} from "@/lang/config.js";
@@ -26,7 +30,11 @@ library.add(
     faMicrophoneLines, faCircleQuestion, faFloppyDisk, faEllipsisVertical, faFileCirclePlus, faCopy, faTrash,
     faCheckCircle, faCheck, faFolder, faTrash, faPlay, faStop, faXmark, faGear, faBookOpen, faCircleInfo,
     faChevronLeft, faChevronRight, faPowerOff, faLink, faLinkSlash, faVolumeXmark, faMicrophoneSlash, faMusic,
-    faTurnUp, faHeadphones, faUpLong, faDownLong, faRepeat, faWaveSquare, faSquare, faSquareCheck, faDownload
+    faTurnUp, faHeadphones, faUpLong, faDownLong, faRepeat, faWaveSquare, faSquare, faSquareCheck, faDownload,
+    faSliders, faMicrophone, faVolumeHigh, faToggleOn, faWandMagicSparkles, faTableCellsLarge, faLightbulb, faShuffle,
+    faChevronDown, faComments, faGamepad, faTv, faRightToBracket, faDesktop, faTowerBroadcast, faComment, faCircleDot,
+    faPlug, faEarListen, faBars, faRotateLeft, faPen, faUpRightFromSquare, faDownLeftAndUpRightToCenter, faRotate, faRightLeft, faClock,
+    faRightFromBracket, faCommentDots, faLock, faChevronUp, faTriangleExclamation, faDisplay, faFont, faImage, faTag
 );
 
 
@@ -38,4 +46,13 @@ app.use(createI18n({
     fallbackLocale: "en_GB",
     messages
 }));
+
+// Hide the browser's own right-click menu (Back / Refresh / Print...) so the app feels native.
+// Text fields keep it for copy / paste.
+document.addEventListener("contextmenu", (event) => {
+    if (!event.target.closest("input, textarea, [contenteditable=true]")) {
+        event.preventDefault();
+    }
+});
+
 app.mount('#app');

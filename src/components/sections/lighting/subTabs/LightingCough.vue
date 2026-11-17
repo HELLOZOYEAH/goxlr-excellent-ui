@@ -1,102 +1,176 @@
-<script>
-import ContentContainer from "@/components/containers/ContentContainer.vue";
-import GroupContainer from "@/components/containers/GroupContainer.vue";
-import RadioSelection from "@/components/lists/RadioSelection.vue";
-import ColourPicker from "@/components/sections/lighting/elements/ColourPicker.vue";
+<template>
+  <div class="lightingPage">
+    <h2 class="title">{{ $t('message.lighting.coughTab.title') }}</h2>
+    <p class="lede">{{ $t('message.lighting.coughTab.lede') }}</p>
 
+    <div class="layout">
+      <!-- Live preview: the two buttons as the device lights them right now -->
+      <section class="preview" :aria-label="$t('message.lighting.faderLights.live')">
+        <div class="previewHead">
+          <span class="live">{{ $t('message.lighting.faderLights.live') }}</span>
+          <span>{{ $t('message.lighting.shared.clickButton') }}</span>
+        </div>
+        <!-- Bleep and mic mute, drawn as on the Device page -->
+        <div class="stage">
+          <div class="device">
+            <div class="zone">
+              <div class="muteButtons">
+                <button type="button" class="bleep" :class="{ selected: target === 'Bleep' }" :style="look('Bleep')"
+                        :aria-pressed="target === 'Bleep'" :aria-label="$t('message.lighting.coughTab.bleep')"
+                        @click="toggleTarget('Bleep')">!@#$?*
+                </button>
+                <button type="button" class="cough" :class="{ selected: target === 'Cough' }" :style="coughLook()"
+                        :aria-pressed="target === 'Cough'" :aria-label="$t('message.lighting.coughTab.cough')"
+                        @click="toggleTarget('Cough')">
+                  <span><font-awesome-icon icon="fa-solid fa-microphone-slash"/></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="previewNote">{{ stateText() }}</div>
+      </section>
+
+      <section class="controls">
+        <div>
+          <div class="lab">{{ $t('message.lighting.faderLights.applyTo') }}</div>
+          <div class="seg" role="radiogroup" :aria-label="$t('message.lighting.faderLights.applyTo')">
+            <button v-for="option in options" :key="option.id" type="button" role="radio"
+                    :aria-checked="target === option.id" :class="{ on: target === option.id }" @click="target = option.id">
+              <i v-if="option.id !== 'both'" class="chip" :style="{ background: '#' + lighting(option.id).colours.colour_one }"></i>
+              {{ $t(option.label) }}
+            </button>
+          </div>
+        </div>
+
+        <ColourPairs :current="targets().map(b => [lighting(b).colours.colour_one, lighting(b).colours.colour_two])"
+                     @pick="setColours"/>
+
+        <div>
+          <div class="lab">{{ $t('message.lighting.faderLights.colours') }}</div>
+          <div class="colourRow">
+            <ColourSwatch id="cough-on" :value="current().colours.colour_one" :label="$t('message.lighting.shared.on')"
+                          :hint="$t('message.lighting.coughTab.onHint')" @change="setColours($event, current().colours.colour_two)"/>
+            <ColourSwatch id="cough-off" :value="current().colours.colour_two" :label="$t('message.lighting.shared.off')"
+                          :hint="$t('message.lighting.shared.offHint')" @change="setColours(current().colours.colour_one, $event)"/>
+            <button type="button" class="swap" :title="$t('message.lighting.shared.swapHint')"
+                    @click="setColours(current().colours.colour_two, current().colours.colour_one)">⇅ {{ $t('message.lighting.faderLights.swap') }}
+            </button>
+          </div>
+            <OffStyleCards sub
+                         :model-value="currentOffStyle()" @pick="setOffStyle"/>
+        </div>
+
+        <p class="note">{{ $t('message.lighting.coughTab.note') }}</p>
+
+        <LightingSaveRow/>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script>
+import ColourSwatch from "@/components/sections/lighting/elements/ColourSwatch.vue";
 import {store} from "@/store";
 import {websocket} from "@/util/sockets";
-import {getLightingInactiveOptions, LightingInactiveOptions} from "@/util/mixerMapping";
-import CenteredContainer from "@/components/containers/CenteredContainer.vue";
+import {buttonLook, shared} from "@/util/lightingColours";
+import OffStyleCards from "@/components/sections/lighting/elements/OffStyleCards.vue";
+import ColourPairs from "@/components/sections/lighting/elements/ColourPairs.vue";
+import LightingSaveRow from "@/components/sections/lighting/elements/LightingSaveRow.vue";
 
+// Lighting → Cough: the Bleep button and the mic mute (Cough) button
 export default {
   name: "LightingCough",
-  components: {
-    CenteredContainer,
-    ContentContainer,
-    GroupContainer,
-    RadioSelection,
-    ColourPicker
-  },
+  components: {ColourSwatch, OffStyleCards, ColourPairs, LightingSaveRow},
+  emits: ["nav-updated"],
 
   data() {
     return {
-      selectedButtonOption: 'Bleep',
+      target: "both",
+      options: [
+        {id: "both", label: "message.lighting.coughTab.both"},
+        {id: "Bleep", label: "message.lighting.coughTab.bleep"},
+        {id: "Cough", label: "message.lighting.coughTab.cough"},
+      ],
     }
   },
 
   methods: {
-    getLightingInactiveOptions,
-    getButtonOptions() {
-      return [
-        {
-          id: 'Bleep',
-          label: this.$t('message.lighting.cough.buttons.bleep'),
-        },
-        {
-          id: 'Cough',
-          label: this.$t('message.lighting.cough.buttons.cough')
-        }
-      ];
-    },
-
     getNodes() {
       return [];
     },
-
-    activeColor() {
-      return "#" + store.getActiveDevice().lighting.buttons[this.selectedButtonOption].colours["colour_one"];
+    device() {
+      return store.getActiveDevice();
     },
-
-    inactiveColor() {
-      return "#" + store.getActiveDevice().lighting.buttons[this.selectedButtonOption].colours["colour_two"];
+    lighting(button) {
+      return this.device().lighting.buttons[button];
     },
-
-    selectedInactiveOption() {
-      return store.getActiveDevice().lighting.buttons[this.selectedButtonOption].off_style
+    targets() {
+      return this.target === "both" ? ["Bleep", "Cough"] : [this.target];
     },
-
-    onButtonSelectionChange(id) {
-      this.selectedButtonOption = id
+    toggleTarget(button) {
+      this.target = this.target === button ? "both" : button;
     },
-
-    onInactiveSelectionChange(id) {
-      websocket.send_command(store.getActiveSerial(), {"SetButtonOffStyle": [this.selectedButtonOption, id]});
+    current() {
+      return this.lighting(this.targets()[0]);
     },
-
-    onActiveColourChange(value) {
-      let active = value.substr(1, 6);
-      let inactive = store.getActiveDevice().lighting.buttons[this.selectedButtonOption].colours.colour_two;
-
-      websocket.send_command(store.getActiveSerial(), {"SetButtonColours": [this.selectedButtonOption, active, inactive]});
+    currentOffStyle() {
+      return shared(this.targets().map(b => this.lighting(b).off_style));
     },
-
-    onInactiveColourChange(value) {
-      let active = store.getActiveDevice().lighting.buttons[this.selectedButtonOption].colours.colour_one;
-      let inactive = value.substr(1, 6);
-
-      websocket.send_command(store.getActiveSerial(), {"SetButtonColours": [this.selectedButtonOption, active, inactive]});
-    }
-  }
+    isLit(button) {
+      if (button === "Cough") return this.device().cough_button.state !== "Unmuted";
+      return !!this.device().button_down?.Bleep;
+    },
+    colour(button) {
+      const l = this.lighting(button);
+      return buttonLook(l.colours.colour_one, l.colours.colour_two, l.off_style, this.isLit(button)).borderColor;
+    },
+    // As on the Device page: border and label in the colour the light shows
+    look(button) {
+      return {borderColor: this.colour(button), color: this.colour(button)};
+    },
+    // The cough button's outline is its background showing around the cut-corner face
+    coughLook() {
+      return {background: this.colour("Cough"), color: this.colour("Cough")};
+    },
+    stateText() {
+      const t = (key) => this.$t(`message.lighting.shared.${key}`);
+      return this.$t('message.lighting.coughTab.state', {
+        cough: this.isLit("Cough") ? t('isOn') : t('isOff'),
+        bleep: this.isLit("Bleep") ? t('isOn') : t('isOff'),
+      });
+    },
+    setColours(one, two) {
+      this.targets().forEach(b => {
+        this.lighting(b).colours.colour_one = one;
+        this.lighting(b).colours.colour_two = two;
+        websocket.send_command(store.getActiveSerial(), {"SetButtonColours": [b, one, two]});
+      });
+    },
+    setOffStyle(style) {
+      this.targets().forEach(b => {
+        this.lighting(b).off_style = style;
+        websocket.send_command(store.getActiveSerial(), {"SetButtonOffStyle": [b, style]});
+      });
+    },
+  },
 }
 </script>
 
-<template>
-  <CenteredContainer>
-    <ContentContainer style="padding-top: 15px; padding-bottom: 20px">
-      <GroupContainer :title="$t('message.lighting.cough.title')">
-        <RadioSelection :title="$t('message.lighting.cough.buttonsTitle')" group="lighting_cough_buttons"
-                        :options="getButtonOptions()" :selected="this.selectedButtonOption"
-                        @selection-changed="onButtonSelectionChange"/>
-        <ColourPicker :title="$t('message.lighting.common.activeColour')" :color-value="activeColor()"
-                      @colour-changed="onActiveColourChange"/>
-        <RadioSelection :title="$t('message.lighting.common.inactiveOption')"
-                        group="lighting_cough_inactive_behaviour"
-                        :options="getLightingInactiveOptions($t)" :selected="this.selectedInactiveOption()"
-                        @selection-changed="onInactiveSelectionChange"/>
-        <ColourPicker :title="$t('message.lighting.common.inactiveColour')" :color-value="inactiveColor()"
-                      @colour-changed="onInactiveColourChange"/>
-      </GroupContainer>
-    </ContentContainer>
-  </CenteredContainer>
-</template>
+<style scoped src="../elements/lightingPage.css"></style>
+<style scoped src="../../device/deviceShell.css"></style>
+<style scoped>
+/* Only the mute buttons of the device body */
+.device {
+  padding: 30px 40px 26px;
+}
+
+.muteButtons {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.bleep, .cough {
+  cursor: pointer;
+}
+</style>

@@ -1,0 +1,571 @@
+/* The GoXLR's body, faders, knobs, sampler and buttons. Shared by DeviceHome (the live device)
+   and DeviceOff (the switched-off device shown when no GoXLR is plugged in), so both look the same. */
+
+/* ---------- Device body ---------- */
+.device {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  width: max-content;
+  margin: 0 auto;
+  padding: 34px 40px 26px;
+  background: linear-gradient(180deg, #2e3231 0%, #262a29 60%, #202322 100%);
+  clip-path: polygon(5% 0, 95% 0, 100% 9%, 100% 87%, 96% 100%, 4% 100%, 0 87%, 0 9%);
+}
+
+.zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zone + .zone {
+  border-left: 1px solid #3a3f3d;
+  padding-left: 16px;
+}
+
+.zoneLabel {
+  font-size: 11px;
+  color: #6f7774;
+  text-align: center;
+  border-top: 1px solid #3a3f3d;
+  padding-top: 3px;
+}
+
+/* ---------- Zoom into a section ---------- */
+/* Clip for the whole zoom (in and out), so no scrollbars flash while the device is enlarged */
+.deviceHome.zoomClip {
+  overflow: hidden;
+}
+
+.zoomClip .scroller {
+  overflow: visible;
+}
+
+.zoomInstant, .zoomInstant * {
+  transition: none !important;
+}
+
+.deviceHome > *, .topBar, .zone > *, .zone + .zone {
+  transition: opacity .3s ease, border-color .3s ease;
+}
+
+.zooming > .panelSlot, .zooming .topBar, .zooming .others,
+.zooming .zone > *:not(.zoomFocus) {
+  opacity: 0;
+}
+
+.zooming .zone + .zone {
+  border-color: transparent;
+}
+
+.zoomable {
+  position: relative;
+  border-radius: 10px;
+  outline: 1px solid transparent;
+  outline-offset: 4px;
+  transition: outline-color .2s ease, background .2s ease;
+}
+
+.zoomable:hover, .zoomable:focus-within, .zoomFocus {
+  outline-color: rgba(89, 177, 182, .55);
+  background: rgba(89, 177, 182, .05);
+}
+
+.zoomChip {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  background: #1b1f1e;
+  border: 1px solid #59b1b6;
+  color: #8fd3d7;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+
+.zoomable:hover .zoomChip, .zoomChip:focus-visible {
+  opacity: 1;
+}
+
+.zooming .zoomChip {
+  opacity: 0;
+}
+
+.zoomLabel {
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.zoomLabel:hover {
+  color: #8fd3d7;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button:focus-visible, .faderTrack:focus-visible {
+  outline: 2px solid #59b1b6;
+  outline-offset: 2px;
+}
+
+.selected {
+  box-shadow: 0 0 0 2px #59b1b6, 0 0 18px rgba(89, 177, 182, 0.45) !important;
+}
+
+/* ---------- Faders ---------- */
+.faders {
+  display: flex;
+  gap: 12px;
+}
+
+.faderColumn {
+  width: 82px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  border-radius: 10px;
+}
+
+.screen {
+  width: 72px;
+  height: 36px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: #d9dedc;
+  color: #141716;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* The screen is the way into a fader's settings: it lights up with a gear on hover */
+.screen {
+  position: relative;
+  transition: box-shadow .15s ease;
+}
+
+.screen:hover {
+  box-shadow: 0 0 0 2px #3ee6d9, 0 0 14px rgba(62, 230, 217, .45) !important;
+}
+
+.screen .gear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #3ee6d9;
+  color: #0b1414;
+  font-size: 9px;
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.screen:hover .gear, .screen:focus-visible .gear, .faderColumn.selected .gear {
+  opacity: 1;
+  transform: none;
+}
+
+.faderTrack {
+  position: relative;
+  width: 72px;
+  height: 262px;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.faderTrack.dragging, .faderTrack.dragging .cap {
+  cursor: grabbing;
+}
+
+.leds {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.leds.left {
+  left: 4px;
+}
+
+.leds.right {
+  right: 4px;
+}
+
+.leds span {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 1px;
+}
+
+.rail {
+  position: absolute;
+  left: 33px;
+  top: 6px;
+  bottom: 6px;
+  width: 6px;
+  border-radius: 3px;
+  background: #0b0d0c;
+  box-shadow: inset 0 0 3px #000;
+}
+
+.faderTrack .cap {
+  position: absolute;
+  left: 19px;
+  width: 34px;
+  height: 58px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #a3a8a6 0%, #6d7270 30%, #8d9290 48%, #505553 52%, #7a7f7d 70%, #4c5150 100%);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  cursor: grab;
+}
+
+.faderTrack .cap span {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 28px;
+  height: 2px;
+  background: #2a2e2d;
+}
+
+.percent {
+  font-size: 12px;
+  color: #9aa4a0;
+}
+
+.mute {
+  width: 60px;
+  height: 34px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: transparent;
+  font-size: 16px;
+}
+
+.mute.blink {
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ---------- Effects ---------- */
+.middleZone {
+  width: 300px;
+}
+
+.effectsArea {
+  display: flex;
+  gap: 18px;
+  height: 236px;
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset {
+  width: 40px;
+  height: 20px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: #141716;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.knobArea {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo {
+  font-family: 'Rajdhani', 'Chakra Petch', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  color: #d9dedc;
+  line-height: 1;
+  text-align: center;
+  position: relative;
+  top: -8px;
+}
+
+.logo span {
+  color: #2f5bd6;
+}
+
+.logo small {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  color: #8a918e;
+}
+
+/* "EXCELLENT": the two L's are an I with a faint foot */
+.logo small i {
+  position: relative;
+  font-style: normal;
+}
+
+.logo small i::after {
+  content: "";
+  position: absolute;
+  left: 0.05em;
+  bottom: 0.05em;
+  width: 0.55em;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.knobs {
+  display: grid;
+  grid-template-columns: repeat(2, 104px);
+  column-gap: 22px;
+}
+
+.knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.knob .ring {
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 84px;
+}
+
+.knob .dot {
+  position: absolute;
+  width: 4px;
+  height: 10px;
+  margin: -5px 0 0 -2px;
+  border-radius: 2px;
+}
+
+.knob .cap {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #3a3f3e, #151817 70%);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 0 0 2px #0e100f;
+  transition: box-shadow 0.12s;
+}
+
+.knob .cap.snapped {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 0 0 2px #0e100f, 0 0 0 2px #59b1b6, 0 0 14px rgba(89, 177, 182, 0.8);
+}
+
+.knob .pointer {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  transform-origin: 50% 18px;
+}
+
+.knobName {
+  margin-top: -4px;
+  min-width: 60px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #8a918e;
+  text-align: center;
+  cursor: pointer;
+}
+
+.knobName .nameGear {
+  font-size: 9px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.knobName:hover {
+  background: rgba(62, 230, 217, .13);
+  color: #3ee6d9;
+}
+
+.knobName:hover .nameGear, .knob.selected .nameGear {
+  opacity: 1;
+}
+
+.knob.dragging .nameGear {
+  display: none;
+}
+
+.knob.dragging .knobName {
+  color: #e8ecea;
+}
+
+/* ---------- Sampler ---------- */
+.samplerArea {
+  display: flex;
+  gap: 32px;
+  height: 140px;
+  margin-top: 6px;
+}
+
+.banks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bank {
+  width: 36px;
+  height: 30px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.pads {
+  position: relative;
+  width: 220px;
+  height: 136px;
+}
+
+.pad {
+  position: absolute;
+  width: 104px;
+  height: 62px;
+  border: 2px solid;
+  border-radius: 5px;
+  background: #0f1211;
+}
+
+.pad.tl { left: 0; top: 0; }
+.pad.tr { left: 114px; top: 0; }
+.pad.bl { left: 0; top: 72px; }
+.pad.br { left: 114px; top: 72px; }
+
+.clear {
+  position: absolute;
+  left: 66px;
+  top: 42px;
+  width: 84px;
+  height: 50px;
+  border: 2px solid;
+  border-radius: 5px;
+  background: #262a29;
+  box-shadow: 0 0 0 6px #262a29;
+  font-size: 13px;
+}
+
+/* ---------- Right column ---------- */
+.rightZone {
+  width: 96px;
+  justify-content: space-between;
+}
+
+.fxButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fx {
+  width: 96px;
+  height: 32px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: #141716;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fx.large {
+  height: 52px;
+}
+
+.muteButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #3a3f3d;
+}
+
+.bleep {
+  width: 96px;
+  height: 38px;
+  border: 2px solid;
+  border-radius: 3px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cough {
+  width: 96px;
+  height: 92px;
+  padding: 2px;
+  border: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%);
+}
+
+.cough span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #262a29;
+  font-size: 26px;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%);
+}
+
+.mini .faderColumn {
+  width: 76px;
+}

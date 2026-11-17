@@ -94,7 +94,7 @@ export default {
   border: none;
   background-color: #3b413f;
   color: #fff;
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
   white-space: nowrap;
 }
 

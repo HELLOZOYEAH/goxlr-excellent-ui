@@ -137,7 +137,9 @@ export class Websocket {
                 command
             ]
         }
-        return this.#sendRequest(request);
+        const result = this.#sendRequest(request);
+        result.then(() => commandDone(command), () => {});
+        return result;
     }
 
     get_mic_level(serial) {
@@ -226,6 +228,21 @@ export function runWebsocket() {
  * The GoXLR Daemon simply handles a DaemonRequest and returns a DaemonResponse, it doesn't do anything special for
  * errors, so we'll handle fulfill or reject here based on what comes back.
  */
+// Listeners told about every device command that succeeded (used for the "not saved yet" markers)
+const commandListeners = [];
+export function onCommandDone(listener) {
+    commandListeners.push(listener);
+}
+function commandDone(command) {
+    for (const listener of commandListeners) {
+        try {
+            listener(command);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+}
+
 export function sendHttpCommand(serial, command) {
     let request = {
         "Command": [
@@ -233,7 +250,9 @@ export function sendHttpCommand(serial, command) {
             command
         ]
     }
-    return executeHttpRequest(request);
+    const result = executeHttpRequest(request);
+    result.then(() => commandDone(command), () => {});
+    return result;
 }
 
 function executeHttpRequest(request) {
@@ -288,11 +307,17 @@ This is here to calculate the address. The dev environment is always on a differ
 we need to bounce requests across to the default port of the daemon. If we're running in production, we need
 to convert the HTTP request to a websocket request on the same port (this can be changed), so work it out here.
  */
+// While developing, ?daemon=127.0.0.1:47813 talks to another daemon (e.g. the streaming PC's,
+// through GoXLR Link) instead of the one on this PC
+function devDaemon() {
+    return new URLSearchParams(window.location.search).get("daemon") || "localhost:14564";
+}
+
 function getWebsocketAddress() {
     const websocketProto = window.location.protocol.startsWith("https:") ? "wss" : "ws";
 
     if (process.env.NODE_ENV === "development") {
-        return `ws://localhost:14564/api/websocket`;
+        return `ws://${devDaemon()}/api/websocket`;
     }
     return `${websocketProto}://${window.location.host}/api/websocket`;
 }
@@ -304,7 +329,7 @@ function getHTTPAddress() {
 
 export function getBaseHTTPAddress() {
     if (process.env.NODE_ENV === "development") {
-        return "http://localhost:14564/";
+        return `http://${devDaemon()}/`;
     }
     return "/";
 }

@@ -36,6 +36,8 @@ export default {
   color: #fff;
   margin-bottom: 10px;
   text-transform: uppercase;
+  font-family: var(--goxlr-title-font);
+  letter-spacing: var(--goxlr-title-spacing);
 }
 
 .contentBody {

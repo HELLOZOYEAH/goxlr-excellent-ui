@@ -169,7 +169,7 @@ export default {
     render_text: function(text, x, y, color = "#fff", text_align = "left", text_baseline = "middle") {
       this.canvas.fillStyle = color;
       this.canvas.textAlign = text_align;
-      this.canvas.font = "12px LeagueMonoCondensed";
+      this.canvas.font = "12px GoXLR";
       this.canvas.textBaseline = text_baseline;
 
       this.canvas.fillText(text, x, y);

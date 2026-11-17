@@ -11,6 +11,10 @@ export default {
     id: {type: String, required: true},
     name: {type: String, required: true},
     selected: {type: Boolean, default: false},
+    // Font Awesome icon shown in the sidebar layout, e.g. "fa-solid fa-sliders"
+    icon: {type: String, required: false, default: null},
+    // Small label on the sidebar icon, e.g. "NEW"
+    badge: {type: String, required: false, default: null},
   },
   data() {
     return {

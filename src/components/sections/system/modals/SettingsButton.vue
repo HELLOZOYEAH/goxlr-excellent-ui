@@ -1,7 +1,12 @@
 <template>
   <div>
+    <!-- Small button for top bars (the no-GoXLR screen) -->
+    <button v-if="compact && store.getConfig() !== undefined" ref="button" type="button" class="compactSettings"
+            @click="$refs.modal.openModal(undefined, $refs.button)">
+      <font-awesome-icon icon="fa-solid fa-gear"/>{{ $t('message.system.settingsButton') }}
+    </button>
     <BigButton
-        v-if="store.getConfig() !== undefined"
+        v-else-if="store.getConfig() !== undefined"
         id="settings_button"
         ref="button"
         :title="$t('message.system.settingsButton')"
@@ -112,6 +117,10 @@ import ModalButton from "@/components/design/modal/ModalButton.vue";
 
 export default {
   name: "SettingsButton",
+  props: {
+    // A small button instead of the big square one
+    compact: {type: Boolean, default: false},
+  },
   computed: {
     languages() {
       return languages
@@ -498,4 +507,28 @@ export default {
 }
 
 
+
+.compactSettings {
+  height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #3a413f;
+  border-radius: 8px;
+  background: #2a2f2d;
+  color: #e8ecea;
+  font-family: var(--goxlr-font);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.compactSettings:hover {
+  border-color: #59b1b6;
+}
+
+.compactSettings:focus-visible {
+  outline: 2px solid #59b1b6;
+  outline-offset: 2px;
+}
 </style>

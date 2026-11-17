@@ -507,7 +507,7 @@ label {
   margin: 0 30px 0 0;
   padding: 5px 24px;
   color: #fff;
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
   background-color: #3b413f;
 }
 

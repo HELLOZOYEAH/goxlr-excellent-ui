@@ -21,6 +21,7 @@
       @load-profile="loadProfile"
       @save-profile="saveProfile"
       @save-profile-as="saveProfileAs"
+      @duplicate-profile="duplicateProfile"
       @menu-item-pressed="menuItemPressed"
     />
   </div>
@@ -62,6 +63,7 @@ export default {
       return [
         { name: this.$t('message.profileManager.menuLoadProfile'), slug: "load" },
         { name: this.$t('message.profileManager.menuLoadProfileColours'), slug: "colours" },
+        { name: this.$t('message.profileManager.menuDuplicateProfile'), slug: "duplicate" },
         { name: this.$t('message.profileManager.menuDeleteProfile'), slug: "delete" },
       ];
     },
@@ -81,6 +83,10 @@ export default {
 
       if (event.option.slug === "load") {
         this.loadProfile(event.item);
+      }
+
+      if (event.option.slug === "duplicate") {
+        this.$refs.manager.askDuplicate(event.item);
       }
 
       if (event.option.slug === "delete") {
@@ -152,6 +158,10 @@ export default {
           "polite",
           this.$t('message.profileManager.accessibilitySavedProfileAs', { profileName: name })
       );
+    },
+
+    duplicateProfile({ source, name }) {
+      sendHttpCommand(store.getActiveSerial(), { DuplicateProfile: [source, name] });
     },
 
     deleteProfile(name) {

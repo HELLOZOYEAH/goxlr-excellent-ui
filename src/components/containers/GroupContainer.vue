@@ -86,6 +86,8 @@ export default {
   color: #ffffff;
   text-align: center;
   text-transform: uppercase;
+  font-family: var(--goxlr-title-font);
+  letter-spacing: var(--goxlr-title-spacing);
 }
 
 .content {

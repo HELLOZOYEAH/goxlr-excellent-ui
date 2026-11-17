@@ -10,7 +10,7 @@
              :min="minValue"
              :max="maxValue" :aria-label="title" :aria-description="title"
              :aria-valuetext="getDisplayValue()" :disabled="disabled"/>
-      <div class="suffix"><span class="filler">{{ displayValue() }}</span><span v-html="getSuffix()"></span></div>
+      <div class="suffix"><span class="filler">{{ displayValue() }}<span v-html="textSuffix"></span></span><span v-html="textSuffix"></span></div>
     </div>
   </div>
 </template>
@@ -53,14 +53,6 @@ export default {
   },
 
   methods: {
-
-    getSuffix() {
-      let output = "";
-      for (let i = 0; i < this.textSuffix.length; i++) {
-        output += "&nbsp;";
-      }
-      return output + this.textSuffix;
-    },
 
     getDisplayValue() {
       return this.localTextValue + this.textSuffix;
@@ -200,6 +192,9 @@ export default {
 /*
  * The key is to 'overlay' the suffix perfectly on top of the input box, then disable all mouse interactions
  * with it so mouse clicks go through. We can then render the suffix above it making it look in-line.
+ *
+ * The invisible filler holds the value plus a hidden copy of the suffix, so the centred overlay is padded by
+ * exactly the suffix's width. This keeps the alignment correct with proportional fonts.
  */
 .sliderInput .suffix {
   position: absolute;
@@ -207,6 +202,10 @@ export default {
   top: 0;
 
   color: v-bind(colour);
+
+  /* Must match the input's font exactly, or the invisible filler won't line up with the typed value */
+  font-family: var(--goxlr-font);
+  font-size: 10pt;
 
   /* Prevent Mouse interactions */
   user-select: none;
@@ -224,7 +223,8 @@ export default {
 }
 
 .sliderInput input[type=number], .sliderInput input[type=text] {
-  font-family: LeagueMonoCondensed, sans-serif;
+  font-family: var(--goxlr-font);
+  font-size: 10pt;
 
   background-color: v-bind(backgroundColour);
   color: v-bind(colour);

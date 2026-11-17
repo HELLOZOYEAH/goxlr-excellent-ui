@@ -138,7 +138,8 @@ export default {
 /* Header Styling.. */
 .modal-header {
   text-transform: uppercase;
-  font-family: LeagueMono, sans-serif;
+  font-family: var(--goxlr-title-font);
+  letter-spacing: var(--goxlr-title-spacing);
   background-color: #3b413f;
   text-align: center;
   color: #fff;

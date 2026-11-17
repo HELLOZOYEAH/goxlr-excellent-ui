@@ -1,5 +1,5 @@
 <template>
-  <WidgetContainer style="width: fit-content;" max_width="fit-content">
+  <component :is="bare ? 'div' : 'WidgetContainer'" style="width: fit-content;" max_width="fit-content">
     <template v-slot:title>{{ $t('message.sampler.samples.waveform.title') }}</template>
     <div
         class="content"
@@ -59,6 +59,11 @@
           |
         </div>
         <div id="waveform" class="waveform"></div>
+        <!-- Above the dashed line the sound passes 0 dB at the current gain and will distort -->
+        <template v-for="c in channels" :key="c">
+          <div class="clipZone top" :style="clipStyle(c, 'top')"></div>
+          <div class="clipZone bottom" :style="clipStyle(c, 'bottom')"></div>
+        </template>
       </div>
 
       <button
@@ -71,7 +76,7 @@
         <font-awesome-icon icon="fa-solid fa-trash"></font-awesome-icon>
       </button>
     </div>
-  </WidgetContainer>
+  </component>
 </template>
 
 <script>
@@ -80,14 +85,24 @@ import {store} from "@/store";
 import WidgetContainer from "@/components/containers/WidgetContainer.vue";
 import WaveSurfer from "wavesurfer.js/dist/wavesurfer";
 
+// Waveform height in px (two channels of half each) and how much of each half 0 dB reaches,
+// leaving room above it to show anything the gain pushes past 0 dB
+const WAVE_HEIGHT = 173;
+const HEADROOM = 0.8;
+
 export default {
   name: "AudioVisualiser",
+  emits: ["deselect-sample", "levels", "live"],
   components: {WidgetContainer},
   props: {
     activeBank: String,
     activeButton: String,
     activeSample: Number,
     sampleName: String,
+    // Without the "Waveform" widget frame (used inside the Sampler page card)
+    bare: {type: Boolean, default: false},
+    // Sample gain in percent: the waveform is drawn at this level, with 0 dB at HEADROOM of the height
+    gain: {type: Number, default: 100},
   },
 
   data() {
@@ -110,6 +125,7 @@ export default {
       stepper: 10,
 
       wavesurfer: undefined,
+      channels: 0,
     };
   },
 
@@ -387,6 +403,72 @@ export default {
         this.mouseUp();
       }
     },
+    applyGain() {
+      if (!this.wavesurfer) return;
+      this.wavesurfer.params.barHeight = HEADROOM * this.gain / 100;
+      if (this.audioBuffer) this.wavesurfer.drawBuffer();
+    },
+    clipStyle(channel, side) {
+      const half = WAVE_HEIGHT / 2, centre = WAVE_HEIGHT * (channel - 1) + half, zone = half * (1 - HEADROOM);
+      return {top: (side === "top" ? centre - half : centre + half - zone) + "px", height: zone + "px"};
+    },
+    // Peak and RMS (linear, before gain) of the trimmed part of the sample
+    emitLevels() {
+      const buffer = this.audioBuffer;
+      if (!buffer || this.activeSample === -1) {
+        this.$emit("levels", null);
+        return;
+      }
+      const start = Math.floor(buffer.length * Math.max(0, this.leftPercentage) / 100);
+      const stop = Math.max(start + 1, Math.floor(buffer.length * Math.min(100, this.rightPercentage) / 100));
+      let peak = 0, sum = 0, count = 0;
+      for (let c = 0; c < buffer.numberOfChannels; c++) {
+        const data = buffer.getChannelData(c);
+        for (let i = start; i < stop; i++) {
+          const v = Math.abs(data[i]);
+          if (v > peak) peak = v;
+          sum += v * v;
+        }
+        count += stop - start;
+      }
+      this.$emit("levels", {peak: peak, rms: Math.sqrt(sum / Math.max(1, count))});
+    },
+    // While the pad plays on the GoXLR, follow along in the decoded file and report the level of
+    // the last ~50 ms each frame (the browser can't hear the hardware, so this is timed, not measured)
+    startLive() {
+      this.stopLive();
+      const buffer = this.audioBuffer;
+      if (!buffer || this.activeSample === -1) return;
+      const startAt = buffer.length * Math.max(0, this.leftPercentage) / 100;
+      const stopAt = buffer.length * Math.min(100, this.rightPercentage) / 100;
+      const window = Math.round(buffer.sampleRate * 0.05);
+      const began = performance.now();
+      const frame = () => {
+        const position = Math.floor(startAt + (performance.now() - began) / 1000 * buffer.sampleRate);
+        if (position >= stopAt) {
+          this.stopLive();
+          return;
+        }
+        const from = Math.max(0, position - window);
+        let peak = 0, sum = 0;
+        for (let c = 0; c < buffer.numberOfChannels; c++) {
+          const data = buffer.getChannelData(c);
+          for (let i = from; i < position; i++) {
+            const v = Math.abs(data[i]);
+            if (v > peak) peak = v;
+            sum += v * v;
+          }
+        }
+        this.$emit("live", {peak: peak, rms: Math.sqrt(sum / Math.max(1, (position - from) * buffer.numberOfChannels))});
+        this.liveFrame = requestAnimationFrame(frame);
+      };
+      this.liveFrame = requestAnimationFrame(frame);
+    },
+    stopLive() {
+      if (this.liveFrame) cancelAnimationFrame(this.liveFrame);
+      this.liveFrame = null;
+      this.$emit("live", null);
+    },
     keyDown(event) {
       if (this.activeSample === -1) {
         return;
@@ -514,6 +596,8 @@ export default {
   },
 
   mounted() {
+    this.audioBuffer = null;
+    this.liveFrame = null;
     this.wavesurfer = WaveSurfer.create({
       container: "#waveform",
       height: 173 / 2,
@@ -523,10 +607,21 @@ export default {
       waveColor: "#d7d7d7",
       cursorWidth: 0,
       progressColor: "#d7d7d7",
+      barHeight: HEADROOM * this.gain / 100,
+    });
+    this.wavesurfer.on("ready", () => {
+      this.audioBuffer = this.wavesurfer.backend.buffer;
+      this.channels = this.audioBuffer ? Math.min(2, this.audioBuffer.numberOfChannels) : 0;
+      this.applyGain();
+      this.emitLevels();
     });
   },
 
   computed: {
+    isPlaying() {
+      return store.getActiveDevice().sampler.banks[this.activeBank][this.activeButton].is_playing;
+    },
+
     left_handle_left() {
       return this.leftPosition + "px";
     },
@@ -549,12 +644,34 @@ export default {
     },
   },
 
+  beforeUnmount() {
+    this.stopLive();
+  },
+
   watch: {
+    isPlaying(playing) {
+      if (playing) this.startLive();
+      else this.stopLive();
+    },
     activeSample() {
       this.resolvePercentages();
+      this.emitLevels();
+    },
+    gain() {
+      this.applyGain();
+    },
+    leftPercentage() {
+      this.emitLevels();
+    },
+    rightPercentage() {
+      this.emitLevels();
     },
 
     sampleName() {
+      this.stopLive();
+      this.audioBuffer = null;
+      this.channels = 0;
+      this.$emit("levels", null);
       if (this.sampleName === "") {
         this.wavesurfer.empty();
         return;
@@ -648,6 +765,24 @@ export default {
   height: 173px;
   z-index: 0;
   background-color: #252927;
+}
+
+.clipZone {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  z-index: 1;
+  background: #ff4a48;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.clipZone.top {
+  border-bottom: 1px dashed #e0605f;
+}
+
+.clipZone.bottom {
+  border-top: 1px dashed #e0605f;
 }
 
 .content {
